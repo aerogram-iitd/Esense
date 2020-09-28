@@ -41,7 +41,7 @@ public class SensorListenerManager implements ESenseSensorListener {
     String activityName;
     int activityIndex;
 
-    public SensorListenerManager(Context context){
+    public SensorListenerManager(Context context) {
         this.context = context;
         eSenseConfig = new ESenseConfig();
         rowIndex = 1;
@@ -63,9 +63,9 @@ public class SensorListenerManager implements ESenseSensorListener {
     public void onSensorChanged(ESenseEvent evt) {
         //Log.d(TAG, "onSensorChanged()");
 
-        if (dataCollecting){
+        if (dataCollecting) {
 
-            if(excelSheet != null){
+            if (excelSheet != null) {
                 rowIndex++;
 
                 timeStamp = evt.getTimestamp();
@@ -108,7 +108,7 @@ public class SensorListenerManager implements ESenseSensorListener {
         }
     }
 
-    public void setColumnWidth(Sheet sheet){
+    public void setColumnWidth(Sheet sheet) {
         sheet.setColumnWidth(0, (15 * 300));
         sheet.setColumnWidth(1, (15 * 300));
         sheet.setColumnWidth(2, (15 * 300));
@@ -134,12 +134,23 @@ public class SensorListenerManager implements ESenseSensorListener {
         sheetName = activityName;
         excelWorkbook = new HSSFWorkbook();
         excelSheet = excelWorkbook.createSheet(sheetName);
+        Row header = excelSheet.createRow(rowIndex);
+        header.createCell(0).setCellValue("Timestamp");
+        header.createCell(1).setCellValue("Ax");
+        header.createCell(2).setCellValue("Ay");
+        header.createCell(3).setCellValue("Az");
+        header.createCell(4).setCellValue("Gx");
+        header.createCell(5).setCellValue("Gy");
+        header.createCell(6).setCellValue("Gz");
+        header.createCell(7).setCellValue("Activity Label");
+        header.createCell(8).setCellValue("Activity");
+
 
         setColumnWidth(excelSheet);
         dataCollecting = true;
     }
 
-    public void stopDataCollection(){
+    public void stopDataCollection() {
 
         rowIndex = 1;
         dataCollecting = false;
@@ -156,7 +167,7 @@ public class SensorListenerManager implements ESenseSensorListener {
             Log.w(TAG, "Failed to save data file", e);
         } finally {
             try {
-                if (null != accelOutputStream){
+                if (null != accelOutputStream) {
                     accelOutputStream.close();
                 }
             } catch (Exception ex) {
@@ -165,10 +176,10 @@ public class SensorListenerManager implements ESenseSensorListener {
         }
     }
 
-    public int getActivityIndex(String activity){
+    public int getActivityIndex(String activity) {
         int index = -1;
 
-        switch (activity){
+        switch (activity) {
             case "Head Shake":
                 index = 1;
                 break;

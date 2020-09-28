@@ -6,41 +6,38 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
-import android.os.Build;
-import android.os.SystemClock;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
-import android.support.v7.app.ActionBar;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.os.SystemClock;
+import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Chronometer;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.widget.ToggleButton;
 
 import com.sozolab.sumon.io.esense.esenselib.ESenseManager;
 
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.List;
 
-import static android.Manifest.permission.RECORD_AUDIO;
-import static android.Manifest.permission.ACCESS_FINE_LOCATION;
-import static android.Manifest.permission.WRITE_EXTERNAL_STORAGE;
+import static com.sozolab.sumon.MainApplication.isGPSEnabled;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
+    private static final String NO_DEVICE = "No Device Found";
+
     private String TAG = "Esense";
-    private String deviceName = "eSense-0181";  // "eSense-0598"
+    private String deviceName = NO_DEVICE;
     private String activityName = "Activity";
     private int timeout = 30000;
 
@@ -71,23 +68,23 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     DatabaseHandler databaseHandler;
     SensorListenerManager sensorListenerManager;
     ConnectionListenerManager connectionListenerManager;
-    private static final int PERMISSION_REQUEST_CODE = 200;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        BluetoothAdapter.getDefaultAdapter().enable();
 
         Log.d(TAG, "onCreate()");
         ActionBar actionBar = getSupportActionBar();
         actionBar.setDisplayShowHomeEnabled(true);
         actionBar.setIcon(R.mipmap.esense);
 
-        sharedPreferences = getSharedPreferences("eSenseSharedPrefs",Context.MODE_PRIVATE);
+        sharedPreferences = getSharedPreferences("eSenseSharedPrefs", Context.MODE_PRIVATE);
         sharedPrefEditor = sharedPreferences.edit();
 
         recordButton = (ToggleButton) findViewById(R.id.recordButton);
-        connectButton =  (Button) findViewById(R.id.connectButton);
+        connectButton = (Button) findViewById(R.id.connectButton);
         headShakeButton = (Button) findViewById(R.id.headShakeButton);
         speakingButton = (Button) findViewById(R.id.speakingButton);
         noddingButton = (Button) findViewById(R.id.noddingButton);
@@ -116,21 +113,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         databaseHandler = new DatabaseHandler(this);
         activityListView = (ListView) findViewById(R.id.activityListView);
         ArrayList<Activity> activityHistory = databaseHandler.getAllActivities();
-        if(activityHistory.size() > 0){
+        if (activityHistory.size() > 0) {
             activityListView.setAdapter(new ActivityListAdapter(this, activityHistory));
         }
 
         audioRecordServiceIntent = new Intent(this, AudioRecordService.class);
         sensorListenerManager = new SensorListenerManager(this);
-        connectionListenerManager = new ConnectionListenerManager(this, sensorListenerManager,
-                connectionTextView, deviceNameTextView, statusImageView, progressBar, sharedPrefEditor);
-        eSenseManager = new ESenseManager(deviceName, MainActivity.this.getApplicationContext(), connectionListenerManager);
-
-        if (!checkPermission()) {
-            requestPermission();
-        } else {
-            Log.d(TAG, "Permission already granted..");
-        }
     }
 
     public static boolean isESenseDeviceConnected() {
@@ -155,13 +143,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public boolean onOptionsItemSelected(MenuItem item) {
 
         switch (item.getItemId()) {
-            case R.id.clear_menu:
-                //Toast.makeText(this, "Clear history...", Toast.LENGTH_SHORT).show();
-                return true;
             case R.id.reset_menu:
-                //Toast.makeText(this, "Reset connection..", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Connection Reset...", Toast.LENGTH_SHORT).show();
+                navigateToSetup();
+//                progressBar.setVisibility(View.INVISIBLE);
+//                deviceName = NO_DEVICE;
+//                connectionTextView.setText("Disconnected");
+//                statusImageView.setImageResource(R.drawable.disconnected);
+//                deviceNameTextView.setText(deviceName);
+//                sensorListenerManager.stopDataCollection();
                 return true;
-
             default:
                 return super.onOptionsItemSelected(item);
         }
@@ -170,10 +161,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onClick(View v) {
 
-        switch (v.getId()){
+        switch (v.getId()) {
             case R.id.connectButton:
-                progressBar.setVisibility(View.VISIBLE);
-                connectEarables();
+                if (deviceName == null || "".equals(deviceName) || NO_DEVICE.equals(deviceName))
+                    showEnterDeviceNameDialog();
+                else {
+                    connectEarables();
+                }
                 break;
 
             case R.id.headShakeButton:
@@ -226,24 +220,24 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
 
             case R.id.recordButton:
-                if(recordButton.isChecked()) {
+                if (recordButton.isChecked()) {
 
-                    if(activityName.equals("Activity")){
+                    if (activityName.equals("Activity")) {
                         recordButton.setChecked(false);
                         showAlertMessage();
-                    }else{
+                    } else {
 
                         activityObj = new Activity();
 
                         currentTime = Calendar.getInstance();
-                        int hour = currentTime.get(Calendar.HOUR_OF_DAY) ;
+                        int hour = currentTime.get(Calendar.HOUR_OF_DAY);
                         int minute = currentTime.get(Calendar.MINUTE);
                         int second = currentTime.get(Calendar.SECOND);
 
                         chronometer.setBase(SystemClock.elapsedRealtime());
                         chronometer.start();
 
-                        if(activityObj != null){
+                        if (activityObj != null) {
                             String startTime = hour + " : " + minute + " : " + second;
                             activityObj.setActivityName(activityName);
                             activityObj.setStartTime(startTime);
@@ -262,13 +256,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 } else {
 
                     currentTime = Calendar.getInstance();
-                    int hour = currentTime.get(Calendar.HOUR_OF_DAY) ;
+                    int hour = currentTime.get(Calendar.HOUR_OF_DAY);
                     int minute = currentTime.get(Calendar.MINUTE);
                     int second = currentTime.get(Calendar.SECOND);
 
                     chronometer.stop();
 
-                    if(activityObj != null){
+                    if (activityObj != null) {
                         String stopTime = hour + " : " + minute + " : " + second;
                         String duration = chronometer.getText().toString();
                         activityObj.setStopTime(stopTime);
@@ -282,8 +276,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     stopDataCollection();
                     stopService(audioRecordServiceIntent);
 
-                    if(databaseHandler != null){
-                        if(activityObj != null){
+                    if (databaseHandler != null) {
+                        if (activityObj != null) {
                             databaseHandler.addActivity(activityObj);
                             ArrayList<Activity> activityHistory = databaseHandler.getAllActivities();
                             activityListView.setAdapter(new ActivityListAdapter(this, activityHistory));
@@ -309,9 +303,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         progressBar.setVisibility(View.GONE);
 
         boolean isConnected = isESenseDeviceConnected();
-        if(isConnected){
+        if (isConnected) {
             //Toast.makeText(this, "Connected", Toast.LENGTH_SHORT).show();
-        }else{
+        } else {
             sharedPrefEditor.putString("status", "disconnected");
             sharedPrefEditor.commit();
 
@@ -322,36 +316,36 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             //Toast.makeText(this, "Disconnected", Toast.LENGTH_SHORT).show();
         }
 
-        String isChecked =  sharedPreferences.getString("checked", null);
-        String status =  sharedPreferences.getString("status", null);
-        String activity =  sharedPreferences.getString("activityName", null);
+        String isChecked = sharedPreferences.getString("checked", null);
+        String status = sharedPreferences.getString("status", null);
+        String activity = sharedPreferences.getString("activityName", null);
 
-        if(activity != null){
+        if (activity != null) {
             activityName = activity;
             setActivityName();
         }
 
-        if(status == null){
+        if (status == null) {
             connectionTextView.setText("Disconnected");
             deviceNameTextView.setText(deviceName);
             statusImageView.setImageResource(R.drawable.disconnected);
-        }else if(status.equals("connected")){
+        } else if (status.equals("connected")) {
             connectionTextView.setText("Connected");
             deviceNameTextView.setText(deviceName);
             statusImageView.setImageResource(R.drawable.connected);
-        }else if(status.equals("disconnected")){
+        } else if (status.equals("disconnected")) {
             connectionTextView.setText("Disconnected");
             deviceNameTextView.setText(deviceName);
             statusImageView.setImageResource(R.drawable.disconnected);
         }
 
-        if(isChecked == null){
+        if (isChecked == null) {
             recordButton.setChecked(false);
             recordButton.setBackgroundResource(R.drawable.start);
-        }else if(isChecked.equals("on")){
+        } else if (isChecked.equals("on")) {
             recordButton.setChecked(true);
             recordButton.setBackgroundResource(R.drawable.stop);
-        }else if(isChecked.equals("off")){
+        } else if (isChecked.equals("off")) {
             recordButton.setChecked(false);
             recordButton.setBackgroundResource(R.drawable.start);
         }
@@ -363,6 +357,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy()");
+        BluetoothAdapter.getDefaultAdapter().disable();
     }
 
     @Override
@@ -371,84 +366,32 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Log.d(TAG, "onPause()");
     }
 
-    public void setActivityName(){
+    public void setActivityName() {
         activityTextView.setText(activityName);
 
     }
-    public void connectEarables(){
-        eSenseManager.connect(timeout);
-    }
 
-    public void startDataCollection(String activity){
-        sensorListenerManager.startDataCollection(activity);
-    }
-
-    public void stopDataCollection(){
-        sensorListenerManager.stopDataCollection();
-    }
-
-    private boolean checkPermission() {
-        int recordResult = ContextCompat.checkSelfPermission(getApplicationContext(), RECORD_AUDIO);
-        int locationResult = ContextCompat.checkSelfPermission(getApplicationContext(), ACCESS_FINE_LOCATION);
-        int writeResult = ContextCompat.checkSelfPermission(getApplicationContext(), WRITE_EXTERNAL_STORAGE);
-
-        return locationResult == PackageManager.PERMISSION_GRANTED &&
-                writeResult == PackageManager.PERMISSION_GRANTED && recordResult == PackageManager.PERMISSION_GRANTED;
-    }
-
-    private void requestPermission() {
-
-        ActivityCompat.requestPermissions(this, new String[]{ACCESS_FINE_LOCATION,
-                WRITE_EXTERNAL_STORAGE, RECORD_AUDIO}, PERMISSION_REQUEST_CODE);
-
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
-        switch (requestCode) {
-            case PERMISSION_REQUEST_CODE:
-                if (grantResults.length > 0) {
-
-                    boolean locationAccepted = grantResults[0] == PackageManager.PERMISSION_GRANTED;
-                    boolean storageAccepted = grantResults[1] == PackageManager.PERMISSION_GRANTED;
-                    boolean recordAccepted = grantResults[2] == PackageManager.PERMISSION_GRANTED;
-
-                    if (locationAccepted && storageAccepted && recordAccepted){
-                        Log.d(TAG, "Permission granted");
-                    } else {
-                        Log.d(TAG, "Permission denied");
-
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            if (shouldShowRequestPermissionRationale(ACCESS_FINE_LOCATION)) {
-                                showMessageOKCancel("You need to allow access to all permissions",
-                                        new DialogInterface.OnClickListener() {
-                                            @Override
-                                            public void onClick(DialogInterface dialog, int which) {
-                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                                    requestPermissions(new String[]{ACCESS_FINE_LOCATION,
-                                                            WRITE_EXTERNAL_STORAGE, RECORD_AUDIO}, PERMISSION_REQUEST_CODE);
-                                                }
-                                            }
-                                        });
-                                return;
-                            }
-                        }
-                    }
-                }
-                break;
+    public void connectEarables() {
+        progressBar.setVisibility(View.VISIBLE);
+        // Mandatory Permissions for BLE to work
+        if (!BluetoothAdapter.getDefaultAdapter().isEnabled() || !isGPSEnabled(true))
+            navigateToSetup();
+        else {
+            sharedPrefEditor.putString("prvUsedDevice", deviceName);
+            sharedPrefEditor.commit();
+            eSenseManager.connect(timeout);
         }
     }
 
-    private void showMessageOKCancel(String message, DialogInterface.OnClickListener okListener) {
-        new AlertDialog.Builder(MainActivity.this)
-                .setMessage(message)
-                .setPositiveButton("OK", okListener)
-                .setNegativeButton("Cancel", null)
-                .create()
-                .show();
+    public void startDataCollection(String activity) {
+        sensorListenerManager.startDataCollection(activity);
     }
 
-    public void showAlertMessage(){
+    public void stopDataCollection() {
+        sensorListenerManager.stopDataCollection();
+    }
+
+    public void showAlertMessage() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setMessage("Please select an activityName !")
                 .setCancelable(false)
@@ -459,6 +402,43 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 });
         AlertDialog alert = builder.create();
         alert.show();
+    }
+
+    private EditText deviceNameEt;
+
+    public void showEnterDeviceNameDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setView(R.layout.dialog_device_name);
+        builder.setCancelable(true)
+                .setPositiveButton("OK", (dialog, id) -> {
+                    //do things
+                    if (deviceNameEt == null) {
+                        deviceNameEt = findViewById(R.id.ddn_name_et);
+                    }
+                    final String name = deviceNameEt.getText().toString();
+                    if (!"".equals(name) && !NO_DEVICE.equals(name)) {
+                        deviceName = name;
+                        deviceNameTextView.setText(deviceName);
+                        connectionListenerManager = new ConnectionListenerManager(this, sensorListenerManager,
+                                connectionTextView, deviceNameTextView, statusImageView, progressBar, sharedPrefEditor);
+                        eSenseManager = new ESenseManager(deviceName, MainActivity.this.getApplicationContext(), connectionListenerManager);
+                        connectEarables();
+                    } else {
+                        Toast.makeText(this, "Inavlid Name! Try Again...", Toast.LENGTH_SHORT).show();
+                    }
+                });
+        AlertDialog alert = builder.create();
+        alert.show();
+        deviceNameEt = alert.findViewById(R.id.ddn_name_et);
+        final String prvUsedDevice = sharedPreferences.getString("prvUsedDevice", null);
+        if (prvUsedDevice != null && !"".equals(prvUsedDevice)) deviceNameEt.setText(prvUsedDevice);
+    }
+
+    private void navigateToSetup() {
+        BluetoothAdapter.getDefaultAdapter().disable();
+        finish();
+        Intent intent = new Intent(this, SetupActivity.class);
+        startActivity(intent);
     }
 
 }
