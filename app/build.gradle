@@ -2,7 +2,7 @@ apply plugin: 'com.android.application'
 
 
 def versionMajor = 1
-def versionMinor = 0
+def versionMinor = 1
 def versionPatch = 0
 /** There are supported type:
  * dev - code 0
@@ -10,6 +10,7 @@ def versionPatch = 0
  * beta - code 2
  * no suffix - code 9 - means final production build from market.*/
 def versionType = 2
+def versionTypeName = null
 
 android {
     compileSdkVersion 30
@@ -21,9 +22,21 @@ android {
         versionName "${versionMajor}.${versionMinor}.${versionPatch}"
         multiDexEnabled true
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
-
-        archivesBaseName = "eSense_" + versionName
-
+        switch (versionType) {
+            case 0:
+                versionTypeName = "dev"
+                break
+            case 1:
+                versionTypeName = "alpha"
+                break
+            case 2:
+                versionTypeName = "beta"
+                break
+            default:
+                versionTypeName = "final"
+                break
+        }
+        archivesBaseName = "eSense_" + versionName + "_" + versionTypeName
     }
 
     bundle {
@@ -40,6 +53,8 @@ android {
 
     buildTypes {
         debug {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             versionNameSuffix ".debug"
             resValue "string", "app_version",
                     "${defaultConfig.versionName}${versionNameSuffix}"
@@ -47,6 +62,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            versionNameSuffix ".release"
             resValue "string", "app_version",
                     "${defaultConfig.versionName}"
         }
