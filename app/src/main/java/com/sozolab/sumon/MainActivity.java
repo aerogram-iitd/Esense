@@ -6,11 +6,9 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
-import androidx.appcompat.app.ActionBar;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -24,6 +22,10 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
+
+import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
 
 import com.sozolab.sumon.io.esense.esenselib.ESenseManager;
 
@@ -152,6 +154,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 //                statusImageView.setImageResource(R.drawable.disconnected);
 //                deviceNameTextView.setText(deviceName);
 //                sensorListenerManager.stopDataCollection();
+                return true;
+            case R.id.storage_menu:
+                navigateToStorage();
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
@@ -441,4 +446,24 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         startActivity(intent);
     }
 
+    private void navigateToStorage() {
+        if (sensorListenerManager.dataDirPath == null || "".equals(sensorListenerManager.dataDirPath)) {
+            Toast.makeText(this, "No Files Present!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = this.getPackageManager().getLaunchIntentForPackage("com.google.android.apps.nbu.files");
+        if (intent != null) {
+            // If the application is avilable
+            Uri uri = Uri.parse(sensorListenerManager.dataDirPath);
+            intent.setDataAndType(uri, "*/*");
+            this.startActivity(intent);
+            Toast.makeText(this, "< ESenseData > in Device  Internal Storage ", Toast.LENGTH_LONG).show();
+        } else {
+            // Play store to install app
+            intent = new Intent(Intent.ACTION_VIEW);
+            intent.setData(Uri.parse("market://details?id=" +
+                    "com.google.android.apps.nbu.files"));
+            this.startActivity(intent);
+        }
+    }
 }
